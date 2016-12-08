@@ -1,0 +1,17 @@
+{
+  "name": "segway-node",
+  "version": "1.0.0",
+  "description": "",
+  "main": "api.js",
+  "dependencies": {
+    "crypto": "0.0.3",
+    "express": "^4.14.0",
+    "ws": "^1.1.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Michał Cziomer",
+  "license": "ISC"
+}
