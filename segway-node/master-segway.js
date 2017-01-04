@@ -3,9 +3,10 @@ var net = require("net"),
     WebSocketServer = WebSocket.Server,
     express = require('express'),
     http = require('http'),
-    Auth = require('./auth');
+    Auth = require('./auth'),
+    Request = require('./request');
 
-var droneAddress = '192.168.3.14',
+var droneAddress = '127.0.0.1',
     dronePort = 4822,
     segwayPort = 4820;
 
@@ -16,27 +17,21 @@ var segwayHttpServer = http.createServer(),
     me = 'MASTER-SEGWAY';
 
 var secretStore = new Auth.SecretStore(),
-    devices = {};
+    devices = {},
+    propagator = new Request.Propagator(secretStore, devices, me);
 
-var messageTypeMethods = {
-    'REGISTER': onRegisterRequest,
-    'SEND_MESSAGE': onSendMessageRequest,
-    'ECHO': onEchoRequest
-};
-
-var encryptedMessages = [
-    'SEND_MESSAGE',
-    'ECHO'
-];
-
-function onEchoRequest (socket, data) {
-    return data + ' echoed';
+function onEchoRequest(socket, request) {
+    console.log('onEchoRequest', request.data);
+    return request.data + ' echoed';
 }
 
-function onRegisterRequest (socket, declaredUtoken) {
-    console.log('onRegisterRequest', declaredUtoken);
-    var token = declaredUtoken || Auth.createToken(),
-        secret = secretStore.create(token);
+function onRegisterRequest(socket, request) {
+    var token = request.data || Auth.createToken(), secret;
+
+    console.log("creating secret for",token);
+    secret = secretStore.create(token);
+
+    console.log('onRegisterRequest, created secret', secret, 'for', token);
     devices[token] = socket;
     return {
         token: token,
@@ -44,23 +39,15 @@ function onRegisterRequest (socket, declaredUtoken) {
     };
 }
 
-function onSendMessageRequest () {
+propagator.onRequest('ECHO', onEchoRequest, true);
+propagator.onRequest('REGISTER', onRegisterRequest);
+propagator.onRequest('SEND_MESSAGE', onRegisterRequest, true);
 
-}
-
-function sendMessageRequest () {
-    var type = 1;
-}
-
-function sendRegisterRequest () {
-    var type = 0;
-}
-
-function checkIfAvailable (address, port, callback) {
+function checkIfAvailable(address, port, callback) {
     net.createConnection(port, address)
-    .on("connect", function(e) {
-        callback("success", e);
-    }).on("error", function(e) {
+        .on("connect", function (e) {
+            callback("success", e);
+        }).on("error", function (e) {
         callback("failure", e);
     });
 }
@@ -68,14 +55,14 @@ function checkIfAvailable (address, port, callback) {
 checkIfAvailable(droneAddress, dronePort, onAvailableCheckResult);
 
 var floodCounter = 0;
-function onAvailableCheckResult (result, event) {
-    if(result === 'success') {
+function onAvailableCheckResult(result, event) {
+    if (result === 'success') {
         console.log('drone online, connecting');
         droneSocket = new WebSocket('ws://' + droneAddress + ':' + dronePort);
         onConnectedToDrone();
     } else {
-        floodCounter --;
-        if(floodCounter <= 0) {
+        floodCounter--;
+        if (floodCounter <= 0) {
             floodCounter = 5;
             console.log('drone offline @ ' + droneAddress + ':' + dronePort);
         }
@@ -86,11 +73,11 @@ function onAvailableCheckResult (result, event) {
 }
 
 
-function onConnectedToDrone () {
+function onConnectedToDrone() {
     var droneId = 'DRONE';
 
     droneSocket.on('open', function open() {
-        console.log('[ME:'+me+']', 'connected to drone');
+        console.log('[ME:' + me + ']', 'connected to drone');
         devices[droneId] = droneSocket;
     });
 
@@ -99,7 +86,7 @@ function onConnectedToDrone () {
     });
 
     droneSocket.on('message', function message(data, flags) {
-        handleMessage(droneSocket, data);
+        propagator.handleMessage(droneSocket, data);
     });
 }
 
@@ -107,60 +94,9 @@ function onConnectedToDrone () {
  * SEGWAY COMM
  */
 
-function traceAddMe (trace) {
-    return trace.push(me);
-}
-
-var handleMessage = function (socket, request) {
-    var meIndex, responseData, requestData, requestError;
-
-    console.log('handle message', request);
-
-    request = JSON.parse(request);
-    if(request && request.type && messageTypeMethods[request.type]) {
-        meIndex = request.trace.indexOf(me);
-
-        if(request.target === me) {
-            if(encryptedMessages.indexOf(request.type) !== -1) {
-                // decrypt request
-                // console.log('decrypting request "' + request.data + '' + '"', request.utoken);
-                try {
-                    requestData = secretStore.access(request.utoken).decrypt(request.data);
-                } catch (e) {
-                    requestError = e;
-                }
-            }
-
-            responseData = messageTypeMethods[request.type](socket, requestData, request.utoken);
-
-            if(encryptedMessages.indexOf(request.type) !== -1) {
-                // encrypt response
-                // console.log('encrypting response "' + responseData + '' + '"', request.utoken);
-                responseData = secretStore.access(request.utoken).encrypt(responseData);
-            }
-
-            socket.send(JSON.stringify({
-                type: request.type,
-                rtoken: request.rtoken,
-                trace: request.trace,
-                utoken: me,
-                target: request.utoken,
-                data: responseData
-            }));
-        } else if(meIndex === -1) {
-            // forward request
-            request.trace.push(me);
-            devices[request.target].send(JSON.stringify(request));
-        } else {
-            // forward response
-            console.log('FORWARDING '+request.rtoken+' TO '+request.trace[meIndex-1]);
-            devices[request.trace[meIndex-1]].send(JSON.stringify(request));
-        }
-    }
-};
 
 var handleClose = function (socket) {
-    console.log(socket);
+    // console.log(socket);
     console.log('handle close');
 };
 
@@ -170,7 +106,7 @@ var handleOpen = function (socket) {
 
 segwaySocketServer.on('connection', function (socket) {
     var onClientMessage = function (data) {
-        handleMessage(socket, data);
+        propagator.handleMessage(socket, data);
     };
 
     var onClientClose = function () {

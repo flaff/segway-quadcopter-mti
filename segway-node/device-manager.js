@@ -7,22 +7,6 @@ function Device (socket, name) {
     this.socket = socket;
 }
 
-Device.prototype.log = function (args) {
-    console.log.apply(console, Array.prototype.slice.call(
-        ['[' + this.id + '] '].concat(Array.prototype.slice.call(args))
-    ));
-};
-
-Device.prototype.sendObject = function (object) {
-    if(this.socket) {
-        try {
-            this.socket.send(JSON.Stringify(object));
-        } catch (e) {
-            this.log('error sending', e);
-        }
-    }
-};
-
 Device.prototype.updateSocket = function (socket) {
     if(socket) {
         if(socket !== this.socket) {
@@ -33,10 +17,11 @@ Device.prototype.updateSocket = function (socket) {
     }
 };
 
+Device.prototype.probe = function (calllback) {
 
-function generateId () {
-    return crypto.randomBytes(20).toString('hex');
-}
+};
+
+
 
 exports.DeviceManager = function () {
     var devices = {};

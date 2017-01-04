@@ -36,17 +36,16 @@ function onBenchmarkEcho () {
     }
 }
 
-function onRegisterMethod(data, utoken) {
-    if (data) {
-        if(data.token) {
-            me = data.token;
-        }
-
-        secretStore.create(utoken, data.secret);
-        console.log('[ME:' + me + ']', 'I am now', me, 'my secret is ', mysecret);
-        // benchmarkEcho();
-        makeRequest('ECHO', masterSegwayId, 'encrypt/decrypt test');
+function onRegisterMethod(socket, response) {
+    if (response && response.data && response.data.token) {
+        me = response.data.token;
     }
+
+    secretStore.create(response.utoken, response.data.secret);
+    console.log('[ME:' + me + ']', 'my secret with', response.utoken, 'is', response.data.secret);
+    // benchmarkEcho();
+    makeRequest('ECHO', masterSegwayId, 'encrypt/decrypt test');
+    // benchmarkEcho();
 }
 
 var methodMap = {
@@ -68,28 +67,28 @@ function echoMethod(data) {
     return data;
 }
 
-function onEchoMethod(data) {
-    console.log('echo:', data);
+function onEchoMethod(socket, response) {
+    console.log('echo:', response.data);
     onBenchmarkEcho();
 }
 
-function makeRequest(name, target, data, callback) {
+function makeRequest(requestName, target, data, callback) {
     var responseData;
 
-    if (name && methodMap[name]) {
+    if (requestName && methodMap[requestName]) {
         var requestToken = Auth.createToken();
-        console.log('[ME:' + me + '] -' + requestToken + '-> [' + target + '] ' + '(' + name + ')', data !== undefined ? data : '<Empty>', callback || '');
+        console.log('[ME:' + me + '] -' + requestToken + '-> [' + target + '] ' + '(' + requestName + ')', data !== undefined ? data : '<Empty>', callback || '');
 
-        waitingOnResponses[requestToken] = callback || onMethodMap[name];
+        waitingOnResponses[requestToken] = callback || onMethodMap[requestName];
 
-        responseData = methodMap[name](data);
-        if(encryptedMessages.indexOf(name) !== -1) {
+        responseData = methodMap[requestName](data);
+        if(encryptedMessages.indexOf(requestName) !== -1) {
             // console.log('crypting message "' + responseData + '' + '"', target);
             responseData = secretStore.access(target).encrypt(responseData);
         }
 
         segwaySocket.send(JSON.stringify({
-            type: name,
+            type: requestName,
             rtoken: requestToken,
             utoken: me,
             trace: [me],
@@ -97,7 +96,7 @@ function makeRequest(name, target, data, callback) {
             data: responseData
         }));
     } else {
-        console.log('no name defined or no method found in map for', name);
+        console.log('no requestName defined or no method found in map for', requestName);
     }
 }
 
@@ -110,14 +109,13 @@ function onMessage(response) {
             response.data = secretStore.access(response.utoken).decrypt(response.data);
             // console.log('decrypted:', response.data);
         }
-        waitingOnResponses[response.rtoken](response.data, response.utoken);
+        waitingOnResponses[response.rtoken](null, response);
     }
 }
 
-
 function onOpenSocket() {
     console.log('[ME] connected to segway');
-    makeRequest('REGISTER', masterSegwayId);
+    makeRequest('REGISTER', masterSegwayId, me);
 }
 
 segwaySocket.on('open', onOpenSocket);

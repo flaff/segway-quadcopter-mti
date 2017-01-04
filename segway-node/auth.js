@@ -21,6 +21,7 @@ var createSecret = function (strength, type) {
 };
 
 function SecretToken (secret) {
+    console.log('secretToken created with ', secret);
     this.update = function (newSecret) {
         secret = newSecret;
     };
