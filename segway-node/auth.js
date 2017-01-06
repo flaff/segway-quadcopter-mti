@@ -8,7 +8,8 @@ var crypto = require('crypto'),
 
 var alghoritm = 'aes192',
     cryptFormat = 'hex',
-    decryptFormat = 'utf8';
+    decryptFormat = 'utf8',
+    loggerEnabled = false;
 
 var createSecret = function (strength, type) {
     var newSecret = crypto.randomBytes((strength || defaultSecretStrength)).toString((type || defaultSecretType));
@@ -21,7 +22,7 @@ var createSecret = function (strength, type) {
 };
 
 function SecretToken (secret) {
-    console.log('secretToken created with ', secret);
+    if(loggerEnabled) console.log('SecretToken created:', secret);
     this.update = function (newSecret) {
         secret = newSecret;
     };

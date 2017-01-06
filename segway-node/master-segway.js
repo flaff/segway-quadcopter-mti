@@ -7,6 +7,7 @@ var net = require("net"),
     Request = require('./request');
 
 var droneAddress = '127.0.0.1',
+    droneId = 'DRONE',
     dronePort = 4822,
     segwayPort = 4820;
 
@@ -20,10 +21,26 @@ var secretStore = new Auth.SecretStore(),
     devices = {},
     propagator = new Request.Propagator(secretStore, devices, me);
 
+var onRegisterResponse = function (socket, response) {
+    // console.log('onRegisterResponse', response.data);
+    console.log('registering with', response.utoken, 'using', response.data.secret);
+    secretStore.create(response.utoken, response.data.secret);
+    propagator.makeRequest('ECHO', response.utoken, 'echo test for '+response.utoken);
+};
+
 function onEchoRequest(socket, request) {
     console.log('onEchoRequest', request.data);
+
+    // setTimeout(function () {
+    //     propagator.makeRequest('ECHO')
+    // }, 250);
+
     return request.data + ' echoed';
 }
+
+var onEchoResponse = function (socket, response) {
+    console.log('onEchoResponse', response.data);
+};
 
 function onRegisterRequest(socket, request) {
     var token = request.data || Auth.createToken(), secret;
@@ -39,6 +56,8 @@ function onRegisterRequest(socket, request) {
     };
 }
 
+propagator.onResponse('REGISTER', onRegisterResponse);
+propagator.onResponse('ECHO', onEchoResponse, true);
 propagator.onRequest('ECHO', onEchoRequest, true);
 propagator.onRequest('REGISTER', onRegisterRequest);
 propagator.onRequest('SEND_MESSAGE', onRegisterRequest, true);
@@ -52,43 +71,44 @@ function checkIfAvailable(address, port, callback) {
     });
 }
 
-checkIfAvailable(droneAddress, dronePort, onAvailableCheckResult);
+// checkIfAvailable(droneAddress, dronePort, onAvailableCheckResult);
 
-var floodCounter = 0;
-function onAvailableCheckResult(result, event) {
-    if (result === 'success') {
-        console.log('drone online, connecting');
-        droneSocket = new WebSocket('ws://' + droneAddress + ':' + dronePort);
-        onConnectedToDrone();
-    } else {
-        floodCounter--;
-        if (floodCounter <= 0) {
-            floodCounter = 5;
-            console.log('drone offline @ ' + droneAddress + ':' + dronePort);
-        }
-        setTimeout(function () {
-            checkIfAvailable(droneAddress, dronePort, onAvailableCheckResult);
-        }, 1500);
-    }
-}
-
-
-function onConnectedToDrone() {
-    var droneId = 'DRONE';
-
-    droneSocket.on('open', function open() {
-        console.log('[ME:' + me + ']', 'connected to drone');
-        devices[droneId] = droneSocket;
-    });
-
-    droneSocket.on('close', function close() {
-        console.log('disconnected from drone');
-    });
-
-    droneSocket.on('message', function message(data, flags) {
-        propagator.handleMessage(droneSocket, data);
-    });
-}
+// var floodCounter = 0;
+// function onAvailableCheckResult(result, event) {
+//     if (result === 'success') {
+//         console.log('drone online, connecting');
+//         droneSocket = new WebSocket('ws://' + droneAddress + ':' + dronePort);
+//         onConnectedToDrone();
+//     } else {
+//         floodCounter--;
+//         if (floodCounter <= 0) {
+//             floodCounter = 5;
+//             console.log('drone offline @ ' + droneAddress + ':' + dronePort);
+//         }
+//         setTimeout(function () {
+//             checkIfAvailable(droneAddress, dronePort, onAvailableCheckResult);
+//         }, 1500);
+//     }
+// }
+//
+//
+// function onConnectedToDrone() {
+//     var droneId = 'DRONE';
+//
+//     droneSocket.on('open', function open() {
+//         console.log('[ME:' + me + ']', 'connected to drone');
+//         devices[droneId] = droneSocket;
+//         propagator.makeRequest('REGISTER', droneId, me);
+//     });
+//
+//     droneSocket.on('close', function close() {
+//         console.log('disconnected from drone');
+//     });
+//
+//     droneSocket.on('message', function message(data, flags) {
+//         propagator.handleMessage(droneSocket, data);
+//     });
+// }
 
 /*
  * SEGWAY COMM
@@ -106,6 +126,7 @@ var handleOpen = function (socket) {
 
 segwaySocketServer.on('connection', function (socket) {
     var onClientMessage = function (data) {
+        console.log('handleMessage - slave', data);
         propagator.handleMessage(socket, data);
     };
 
@@ -122,3 +143,20 @@ segwayHttpServer.on('request', segwayHttpApp);
 segwayHttpServer.listen(segwayPort, function () {
     console.log('listening on ' + segwayHttpServer.address().port);
 });
+
+function onOpenDroneSocket() {
+    console.log('[ME] connected to', droneId);
+    devices[droneId] = droneSocket;
+    propagator.makeRequest('REGISTER', droneId, me);
+}
+
+try {
+    droneSocket = new WebSocket('ws://' + droneAddress + ':' + dronePort);
+    droneSocket.on('open', onOpenDroneSocket);
+    droneSocket.on('message', function (response) {
+
+        // console.log('handleMessage - drone', response);
+        propagator.handleMessage(droneSocket, response);
+    });
+}
+catch (e) {console.log('error connecting to drone @', droneAddress, dronePort,'\n', e.message);}

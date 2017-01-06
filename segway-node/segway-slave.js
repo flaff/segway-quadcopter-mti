@@ -17,11 +17,10 @@ var secretStore = new Auth.SecretStore(),
     propagator = new Request.Propagator(secretStore, devices, me);
 
 var onRegisterResponse = function (socket, response) {
-    console.log('onRegisterResponse', response.data);
+    // console.log('onRegisterResponse', response.data);
     console.log('registering with', response.utoken, 'using', response.data.secret);
     secretStore.create(response.utoken, response.data.secret);
-    secretStore.create(droneId, response.data.secret);
-    propagator.makeRequest('ECHO', droneId, 'echo test');
+    propagator.makeRequest('ECHO', droneId, 'echo test for '+droneId, null, response.utoken);
 };
 
 var onEchoResponse = function (socket, response) {
@@ -33,16 +32,22 @@ propagator.onResponse('REGISTER', onRegisterResponse);
 
 
 function onOpenSegwaySocket() {
-    console.log('[ME] connected to segway');
+    console.log('connected to', segwayId);
     devices[segwayId] = segwaySocket;
     propagator.makeRequest('REGISTER', segwayId, me);
 }
 
 function onOpenDroneSocket() {
-    console.log('[ME] connected to segway');
+    console.log('connected to', droneId);
     devices[droneId] = droneSocket;
     propagator.makeRequest('REGISTER', droneId, me);
 }
+try {
+    droneSocket = new WebSocket('ws://' + droneAddress + ':' + dronePort);
+    droneSocket.on('open', onOpenDroneSocket);
+    droneSocket.on('message', function (response) {propagator.handleMessage(droneSocket, response)});
+}
+catch (e) {console.log('error connecting to drone @', droneAddress, dronePort,'\n', e.message);}
 
 try {
     segwaySocket = new WebSocket('ws://' + segwayAddress + ':' + segwayPort);
@@ -51,10 +56,4 @@ try {
 }
 catch (e) {console.log('error connecting to segway @', segwayAddress, segwayPort,'\n', e.message);}
 
-try {
-    droneSocket = new WebSocket('ws://' + droneAddress + ':' + dronePort);
-    droneSocket.on('open', onOpenDroneSocket);
-    droneSocket.on('message', function (response) {propagator.handleMessage(droneSocket, response)});
-}
-catch (e) {console.log('error connecting to drone @', droneAddress, dronePort,'\n', e.message);}
 

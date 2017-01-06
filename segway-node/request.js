@@ -1,5 +1,44 @@
 var Auth = require('./auth');
 
+
+var loggerSettings = {
+    enableLogger: true,
+    showEncryptedContent: false,
+    showFullMessage: false,
+    showRequestToken: true
+};
+
+var logger = {
+    onMakeRequest: function (target, requestToken, requestName, data, encryptedMethodNames, encryptedPreview) {
+        if(loggerSettings.enableLogger) {
+            console.log('>>' + target + '<<',
+                loggerSettings.showRequestToken ? requestToken : '' + ':', requestName + ' - ',
+                data !== undefined ? data : '<Empty>',
+                loggerSettings.showEncryptedContent && encryptedMethodNames.indexOf(requestName) !== -1?'\n  └ encrypted as: '+encryptedPreview:'');
+        }
+    },
+
+    onHandleMessageReceive: function (message, encryptedMethodNames, encryptedPreview) {
+        if(loggerSettings.enableLogger) {
+            console.log('<<' + message.utoken + '>>',
+                loggerSettings.showRequestToken ? message.rtoken : '' + ':', message.type + ' - ',
+                message.data !== undefined ? message.data : '<Empty>',
+                loggerSettings.showEncryptedContent && encryptedMethodNames.indexOf(message.type) !== -1?'\n  └ encrypted as: '+encryptedPreview:'');
+        }
+    },
+
+    onHandleMessageRespond: function (message, encryptedMethodNames, encryptedResponse, response) {
+        if(loggerSettings.enableLogger) {
+            console.log('>>' + message.utoken + '<<',
+                loggerSettings.showRequestToken ? message.rtoken : '' + ':', message.type + '(r) - ',
+                (response || encryptedResponse) ? (response || encryptedResponse) : '<Empty>',
+                loggerSettings.showEncryptedContent && encryptedMethodNames.indexOf(message.type) !== -1?'\n  └ encrypted as: '+encryptedResponse:'');
+        }
+    }
+};
+
+
+
 function Propagator (secretStore, devices, me) {
 
     var onRequestMethods = {},
@@ -21,7 +60,7 @@ function Propagator (secretStore, devices, me) {
         }
     };
 
-    this.makeRequest = function (requestName, target, data, callback) {
+    this.makeRequest = function (requestName, target, data, callback, throughDevice) {
         var responseData, encryptedPreview;
 
         var requestToken = Auth.createToken();
@@ -31,13 +70,12 @@ function Propagator (secretStore, devices, me) {
 
         if(encryptedMethodNames.indexOf(requestName) !== -1) {
             responseData = secretStore.access(target).encrypt(responseData);
-            // console.log('crypting message "' + responseData + '' + '"', target);
             encryptedPreview = responseData;
         }
-        console.log('[ME:' + me + '] -' + requestToken + '-> [' + target + '] ' + '(' + requestName + ')', data !== undefined ? data : '<Empty>'
-            ,encryptedMethodNames.indexOf(requestName) !== -1?'\n  └secure- '+encryptedPreview:'');
 
-        devices[target].send(JSON.stringify({
+        logger.onMakeRequest(target, requestToken, requestName, data, encryptedMethodNames, encryptedPreview);
+
+        devices[throughDevice || target].send(JSON.stringify({
             type: requestName,
             rtoken: requestToken,
             utoken: me,
@@ -45,14 +83,10 @@ function Propagator (secretStore, devices, me) {
             target: target,
             data: responseData
         }));
-
-        // return requestToken;
     };
 
     this.handleMessage = function (socket, message) {
-        var meIndex, responseData, requestError, encryptedMessagePreview;
-
-        // console.log('handle message', request);
+        var meIndex, responseData, encryptedResponseData, requestError, encryptedMessagePreview;
 
         message = JSON.parse(message);
         if(message && message.type && (onRequestMethods[message.type] || onResponseMethods[message.type] || waitingForResponse[message.rtoken])) {
@@ -62,7 +96,6 @@ function Propagator (secretStore, devices, me) {
 
                 // decrypt request
                 if(encryptedMethodNames.indexOf(message.type) !== -1) {
-                    // console.log('decrypting message "' + message.data + '' + '"', message.utoken);
                     try {
                         encryptedMessagePreview = message.data;
                         message.data = secretStore.access(message.utoken).decrypt(message.data);
@@ -70,9 +103,8 @@ function Propagator (secretStore, devices, me) {
                         requestError = e;
                     }
                 }
-                console.log('[ME:' + me + '] <-' + message.rtoken + '- [' + message.utoken + '] ' + '(' + message.type + ')',
-                    message.data || '<Empty>', encryptedMethodNames.indexOf(message.type) !== -1?'\n  └secure- '+encryptedMessagePreview:'');
 
+                logger.onHandleMessageReceive(message, encryptedMethodNames, encryptedMessagePreview);
 
                 // this is a response for me, not a request
                 if(waitingForResponse[message.rtoken]) {
@@ -84,18 +116,10 @@ function Propagator (secretStore, devices, me) {
 
                 // encrypt response
                 if(encryptedMethodNames.indexOf(message.type) !== -1) {
-                    console.log('encrypting response "' + responseData + '' + '"', message.utoken);
-                    responseData = secretStore.access(message.utoken).encrypt(responseData);
+                    encryptedResponseData = secretStore.access(message.utoken).encrypt(responseData);
                 }
 
-                // console.log('sending:\n', {
-                //     type: message.type,
-                //     rtoken: message.rtoken,
-                //     trace: message.trace,
-                //     utoken: me,
-                //     target: message.utoken,
-                //     data: responseData
-                // });
+                logger.onHandleMessageRespond(message, encryptedMethodNames, responseData, encryptedResponseData);
 
                 socket.send(JSON.stringify({
                     type: message.type,
@@ -103,9 +127,9 @@ function Propagator (secretStore, devices, me) {
                     trace: message.trace,
                     utoken: me,
                     target: message.utoken,
-                    data: responseData
+                    data: encryptedResponseData || responseData
                 }), function (e) {
-                    console.log('socket.send error', e);
+                    if(e) console.log('socket.send error', e);
                 });
             } else if(meIndex === -1) {
                 // forward request
