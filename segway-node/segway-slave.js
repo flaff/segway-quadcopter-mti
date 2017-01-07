@@ -7,10 +7,10 @@ var segwayAddress = '127.0.0.1',
     segwayPort = 4820,
     segwaySocket = null,
     segwayId = 'MASTER-SEGWAY',
-    droneAddress = '127.0.0.1',
-    dronePort = 4822,
-    droneSocket = null,
-    droneId = 'DRONE';
+    quadcopterAddress = '127.0.0.1',
+    quadcopterPort = 4822,
+    quadcopterSocket = null,
+    quadcopterId = 'QUADCOPTER';
 
 var secretStore = new Auth.SecretStore(),
     devices = {},
@@ -20,7 +20,7 @@ var onRegisterResponse = function (socket, response) {
     // console.log('onRegisterResponse', response.data);
     console.log('registering with', response.utoken, 'using', response.data.secret);
     secretStore.create(response.utoken, response.data.secret);
-    propagator.makeRequest('ECHO', droneId, 'echo test for '+droneId, null, response.utoken);
+    propagator.makeRequest('ECHO', response.utoken, 'echo test for '+response.utoken);
 };
 
 var onEchoResponse = function (socket, response) {
@@ -38,16 +38,16 @@ function onOpenSegwaySocket() {
 }
 
 function onOpenDroneSocket() {
-    console.log('connected to', droneId);
-    devices[droneId] = droneSocket;
-    propagator.makeRequest('REGISTER', droneId, me);
+    console.log('connected to', quadcopterId);
+    devices[quadcopterId] = quadcopterSocket;
+    propagator.makeRequest('REGISTER', quadcopterId, me);
 }
 try {
-    droneSocket = new WebSocket('ws://' + droneAddress + ':' + dronePort);
-    droneSocket.on('open', onOpenDroneSocket);
-    droneSocket.on('message', function (response) {propagator.handleMessage(droneSocket, response)});
+    quadcopterSocket = new WebSocket('ws://' + quadcopterAddress + ':' + quadcopterPort);
+    quadcopterSocket.on('open', onOpenDroneSocket);
+    quadcopterSocket.on('message', function (response) {propagator.handleMessage(quadcopterSocket, response)});
 }
-catch (e) {console.log('error connecting to drone @', droneAddress, dronePort,'\n', e.message);}
+catch (e) {console.log('error connecting to quadcopter @', quadcopterAddress, quadcopterPort,'\n', e.message);}
 
 try {
     segwaySocket = new WebSocket('ws://' + segwayAddress + ':' + segwayPort);
