@@ -1,13 +1,13 @@
 var WebSocket = require('ws'),
     Auth = require('./auth'),
     Request = require('./request'),
-    me = 'SEGWAY-SLAVE-01';
+    me = 'SLAVE-SEGWAY-01';
 
-var segwayAddress = '127.0.0.1',
+var segwayAddress = '192.168.4.14',
     segwayPort = 4820,
     segwaySocket = null,
     segwayId = 'MASTER-SEGWAY',
-    quadcopterAddress = '127.0.0.1',
+    quadcopterAddress = '192.168.3.14',
     quadcopterPort = 4822,
     quadcopterSocket = null,
     quadcopterId = 'QUADCOPTER';
@@ -20,7 +20,7 @@ var onRegisterResponse = function (socket, response) {
     // console.log('onRegisterResponse', response.data);
     console.log('registering with', response.utoken, 'using', response.data.secret);
     secretStore.create(response.utoken, response.data.secret);
-    propagator.makeRequest('ECHO', response.utoken, 'echo test for '+response.utoken);
+    // propagator.makeRequest('ECHO', response.utoken, 'echo test for '+response.utoken);
 };
 
 var onEchoResponse = function (socket, response) {

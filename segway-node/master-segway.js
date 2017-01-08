@@ -6,7 +6,7 @@ var net = require("net"),
     Auth = require('./auth'),
     Request = require('./request');
 
-var quadcopterAddress = '127.0.0.1',
+var quadcopterAddress = '192.168.3.14',
     quadcopterId = 'QUADCOPTER',
     quadcopterPort = 4822,
     segwayPort = 4820;
@@ -24,7 +24,7 @@ var secretStore = new Auth.SecretStore(),
 var onRegisterResponse = function (socket, response) {
     console.log('registering with', response.utoken, 'using', response.data.secret);
     secretStore.create(response.utoken, response.data.secret);
-    propagator.makeRequest('ECHO', response.utoken, 'echo test for '+response.utoken);
+    // propagator.makeRequest('ECHO', response.utoken, 'echo test for '+response.utoken);
 };
 
 function onEchoRequest(socket, request) {

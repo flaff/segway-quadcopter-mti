@@ -13,7 +13,7 @@ var internalPropagator;
 
 function takeAPhoto () {
     // zrob zdjecie
-    console.log('usmiech!');
+    // console.log('usmiech!');
     return 'TAKE_A_PHOTO_SUCCESS';
 }
 

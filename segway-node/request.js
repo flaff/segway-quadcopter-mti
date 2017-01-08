@@ -2,7 +2,7 @@ var Auth = require('./auth');
 
 
 var loggerSettings = {
-    enableLogger: true,
+    enableLogger: false,
     showEncrytedFormOfContent: false,
     showFullMessage: false,
     showRequestToken: true,
@@ -51,7 +51,7 @@ var logger = {
 };
 
 function isMessageFromInternal (socket, message) {
-    return (message.utoken === 'INTERNAL' && socket.upgradeReq.connection.remoteAddress === '::ffff:127.0.0.1');
+    return (message.utoken === 'INTERNAL' && socket.upgradeReq.connection.remoteAddress.indexOf('127.0.0.1') !== -1);
 }
 
 function InternalPropagator (me, internalSocket) {
@@ -164,7 +164,7 @@ function Propagator (secretStore, devices, me) {
 
     this.fromInternalRequest = function (socket, message) {
         if(loggerSettings.enableLogger) console.log(nowText(), '<<INTERNAL>>', message.rtoken, '-', message.data);
-        this.makeRequest('MESSAGE', message.target, message.data, null, null, message.rtoken);
+        this.makeRequest('MESSAGE', message.target, message.data, null, 'SLAVE-SEGWAY-01', message.rtoken);
     };
 
     this.fromInternalResponse = function (socket, message) {
@@ -303,12 +303,12 @@ function Propagator (secretStore, devices, me) {
                 // });
             } else if(meIndex === -1) {
                 // forward request
-                console.log(nowText(), '<<'+message.utoken+'>>', '>>'+message.target+'<<', message.trace);
+                if(loggerSettings.enableLogger) console.log(nowText(), '<<'+message.utoken+'>>', '>>'+message.target+'<<', message.trace);
                 message.trace.push(me);
                 devices[message.target].send(JSON.stringify(message));
             } else {
                 // forward response
-                console.log(nowText(), '<<'+message.utoken+'>>', '>>'+message.trace[meIndex-1]+'<<', '(response)', message.trace);
+                if(loggerSettings.enableLogger) console.log(nowText(), '<<'+message.utoken+'>>', '>>'+message.trace[meIndex-1]+'<<', '(response)', message.trace);
                 devices[message.trace[meIndex-1]].send(JSON.stringify(message));
             }
         }
