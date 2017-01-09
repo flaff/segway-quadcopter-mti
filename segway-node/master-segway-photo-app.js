@@ -11,9 +11,12 @@ var internalAddress = '127.0.0.1',
 
 var internalPropagator;
 
-var startTime, responseCounter = 0, limit = 1000;
-function startBenchmark () {
+var startTime, responseCounter = 0, currentLimit = 100, startLimit = 100, maxLimit = 1000, limitDelta = 100;
+
+function benchmark(limit) {
     var i;
+    responseCounter = 0;
+    console.log('starting benchark:', limit);
     startTime = (new Date()).getTime();
     for(i = 0; i < limit; i++) {
         setTimeout(function () {
@@ -29,13 +32,17 @@ function onMessageRequest (request) {
 function onMessageResponse (response) {
     if(response.data === 'TAKE_A_PHOTO_SUCCESS') {
         responseCounter++;
-        // console.log('sukces robienia zdjecia!');
-        if(responseCounter === limit) {
-            console.log((new Date()).getTime() - startTime);
+        if (responseCounter === currentLimit) {
+            console.log(currentLimit, (new Date()).getTime() - startTime);
+
+            currentLimit += limitDelta;
+            if(currentLimit <= maxLimit) {
+                // odpocznij
+                setTimeout(function () {
+                    benchmark(currentLimit);
+                }, 250);
+            }
         }
-    } else if (response.data === 'TAKE_A_PHOTO_FAILURE') {
-        // porazka robienia zdjecia
-        console.log('nie udalo sie zrobic zdjecia.');
     }
 }
 
@@ -49,7 +56,8 @@ var onOpenInternalSocket = function () {
     setTimeout(function(){
         console.log('wysylam zapytanie o zrobienie zdjecia');
         // internalPropagator.makeRequest('TAKE_A_PHOTO', 'QUADCOPTER');
-        startBenchmark();
+        currentLimit = startLimit;
+        benchmark(currentLimit);
     }, 250);
 };
 
